@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="スキャンPDF">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>スキャンPDF</title>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#1b1f24;--sub:#667085;--line:#e2e5e9;
+  --accent:#1f6feb;--accent-ink:#fff;--danger:#d92d20;
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f1115;--card:#1a1d23;--ink:#e8eaed;--sub:#9aa3ae;--line:#2b3038;--accent:#4c8dff}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+button,select,input{font:inherit}
+button{cursor:pointer}
+header{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;
+  padding:calc(var(--st) + 12px) calc(var(--sr) + 16px) 10px calc(var(--sl) + 16px);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0;flex:1;letter-spacing:.02em}
+#count{color:var(--sub);font-size:14px}
+main{padding:12px calc(var(--sr) + 12px) calc(var(--sb) + 100px) calc(var(--sl) + 12px);max-width:960px;margin:0 auto}
+
+details.settings{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:0 14px;margin-bottom:12px}
+details.settings summary{padding:12px 0;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+details.settings summary::-webkit-details-marker{display:none}
+details.settings summary::after{content:"▾";color:var(--sub)}
+details[open].settings summary::after{content:"▴"}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.row select,.row input{min-width:0;flex:0 1 60%;height:36px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:0 8px;font-size:15px}
+.danger-btn{width:100%;height:42px;margin:10px 0 14px;border-radius:10px;border:1px solid var(--danger);background:transparent;color:var(--danger);font-weight:600}
+.danger-btn.armed{background:var(--danger);color:#fff}
+
+.empty{text-align:center;color:var(--sub);padding:56px 16px;line-height:1.8}
+.empty .big{font-size:48px;line-height:1}
+.empty b{color:var(--ink)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.thumb{position:relative;aspect-ratio:3/4;background:var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.thumb img{max-width:100%;max-height:100%;display:block}
+.thumb img:not([src]){visibility:hidden}
+.num{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.62);color:#fff;font-size:12px;padding:2px 8px;border-radius:10px}
+.tag{position:absolute;right:6px;bottom:6px;background:var(--accent);color:#fff;font-size:11px;padding:2px 6px;border-radius:6px}
+.card select{margin:6px 6px 0;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px}
+.tools{display:flex;gap:4px;padding:6px}
+.tools button{flex:1;height:34px;border:none;border-radius:8px;background:var(--bg);color:var(--ink);font-size:15px}
+.tools button:disabled{opacity:.3}
+.tools button.del{color:var(--danger)}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;gap:8px;background:var(--card);border-top:1px solid var(--line);
+  padding:10px calc(var(--sr) + 12px) calc(var(--sb) + 10px) calc(var(--sl) + 12px)}
+.bar .btn{flex:1;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.bar .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.bar .btn:disabled{opacity:.4}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+
+.overlay{position:fixed;inset:0;z-index:20;display:none}
+.overlay.show{display:flex}
+#busy{background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:40}
+.busy-box{background:var(--card);color:var(--ink);border-radius:14px;padding:20px 26px;display:flex;align-items:center;gap:14px;font-size:15px}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+#result{background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);color:var(--ink);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:20px 18px calc(var(--sb) + 18px)}
+.sheet h2{margin:0 0 6px;font-size:18px}
+.sheet .meta{color:var(--sub);font-size:14px;margin:0 0 16px;word-break:break-all}
+.sheet button{width:100%;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-weight:600;margin-top:8px}
+.sheet button.primary{background:var(--accent);color:#fff;border-color:transparent}
+.sheet .msg{min-height:1.4em;font-size:14px;color:var(--sub);margin:10px 0 0;text-align:center}
+
+#editor{background:#000;color:#fff;flex-direction:column;z-index:30}
+.ed-top,.ed-bottom{display:flex;align-items:center;gap:8px;padding:10px calc(var(--sr) + 12px) 10px calc(var(--sl) + 12px)}
+.ed-top{padding-top:calc(var(--st) + 10px)}
+.ed-bottom{padding-bottom:calc(var(--sb) + 12px);justify-content:center}
+.ed-top .t{flex:1;text-align:center;font-size:13px;color:#bbb}
+.ed-btn{height:40px;padding:0 14px;border-radius:10px;border:none;background:#2a2d33;color:#fff;font-size:15px}
+.ed-btn.primary{background:var(--accent);font-weight:600}
+.ed-stage{position:relative;flex:1;overflow:hidden;touch-action:none}
+#edImg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:calc(100% - 56px);max-height:calc(100% - 56px);
+  user-select:none;-webkit-user-select:none;pointer-events:none}
+#edSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.handle{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;touch-action:none;display:flex;align-items:center;justify-content:center;cursor:grab}
+.handle::after{content:"";width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.6);transition:transform .1s}
+.handle.active::after{transform:scale(1.35)}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sb) + 86px);z-index:50;background:#222;color:#fff;
+  border-radius:10px;padding:10px 14px;font-size:14px;display:none;align-items:center;gap:14px;max-width:calc(100% - 32px);box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#toast.show{display:flex}
+#toast button{background:none;border:none;color:#7fb0ff;font-weight:700;padding:0;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>スキャンPDF</h1>
+  <span id="count"></span>
+</header>
+
+<main>
+  <details class="settings" id="settingsBox">
+    <summary>設定</summary>
+    <label class="row">ファイル名<input id="setName" placeholder="自動（scan_日付_時刻）" autocomplete="off"></label>
+    <label class="row">用紙
+      <select id="setPaper"><option value="a4">A4に合わせる</option><option value="fit">画像の比率のまま</option></select></label>
+    <label class="row">画質
+      <select id="setQuality"><option value="std">標準（軽い）</option><option value="high">高画質</option></select></label>
+    <label class="row">新しいページの補正
+      <select id="setMode"></select></label>
+    <label class="row">書類の輪郭を自動で合わせる
+      <select id="setAuto"><option value="on">する</option><option value="off">しない</option></select></label>
+    <button class="danger-btn" id="clearAll">すべてのページを削除</button>
+  </details>
+
+  <div class="empty" id="empty">
+    <div class="big">📄</div>
+    <p><b>まだページがありません．</b><br>下の「撮影」で書類を撮ってください．<br>書類の輪郭は自動で合わせます．ずれていたら写真をタップして直せます．</p>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<div class="bar">
+  <label class="btn" for="camIn">📷 撮影</label>
+  <label class="btn" for="libIn">🖼 写真から</label>
+  <button class="btn primary" id="makePdf" disabled>PDF作成</button>
+  <input class="vh" type="file" id="camIn" accept="image/*" capture="environment">
+  <input class="vh" type="file" id="libIn" accept="image/*" multiple>
+</div>
+
+<div class="overlay" id="editor">
+  <div class="ed-top">
+    <button class="ed-btn" id="edCancel">キャンセル</button>
+    <span class="t" id="edMsg">四隅を書類に合わせる</span>
+    <button class="ed-btn primary" id="edDone">決定</button>
+  </div>
+  <div class="ed-stage" id="edStage">
+    <img id="edImg" alt="">
+    <svg id="edSvg"><polygon id="edPoly" fill="rgba(76,141,255,.18)" stroke="#4c8dff" stroke-width="2" stroke-linejoin="round"/></svg>
+    <div class="handle" data-i="0"></div><div class="handle" data-i="1"></div>
+    <div class="handle" data-i="2"></div><div class="handle" data-i="3"></div>
+  </div>
+  <div class="ed-bottom">
+    <button class="ed-btn" id="edAuto">自動検出</button>
+    <button class="ed-btn" id="edReset">全体に戻す</button>
+    <button class="ed-btn" id="edRot">⟳ 回転</button>
+  </div>
+</div>
+
+<div class="overlay" id="result">
+  <div class="sheet">
+    <h2>PDFができました</h2>
+    <p class="meta" id="resMeta"></p>
+    <button class="primary" id="resSave">保存 / 共有</button>
+    <button id="resNew">ページを全部消して新しく始める</button>
+    <button id="resClose">閉じる（ページは残す）</button>
+    <p class="msg" id="resMsg"></p>
+  </div>
+</div>
+
+<div class="overlay" id="busy"><div class="busy-box"><div class="spin"></div><span id="busyText">処理中…</span></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const MODES = [['orig','元画像'],['color','くっきり（カラー）'],['bw','白黒（書類）']];
+const FULL = [[0,0],[1,0],[1,1],[0,1]];
+const META_KEY = 'scanpdf.pages.v1', SET_KEY = 'scanpdf.settings.v1';
+const MAX_SRC = 2400;                       // 保存する元画像の長辺(px)
+const QUALITY = { std:{edge:1700, q:0.82}, high:{edge:2400, q:0.9} };
+const state = { pages:[], settings:{ fname:'', paper:'a4', quality:'std', defMode:'color', autoDetect:true } };
+const thumbs = new Map();
+let lastPdf = null;
+
+/* ---------- 小物 ---------- */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
+const isFull = q => !q || q.every((p,i) => Math.abs(p[0]-FULL[i][0]) < 1e-4 && Math.abs(p[1]-FULL[i][1]) < 1e-4);
+function canvas(w,h){ const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+const ctx2d = c => c.getContext('2d', { willReadFrequently:true });
+function free(c){ if (c && c.width !== undefined){ c.width = 0; c.height = 0; } }
+const nextFrame = () => new Promise(r => setTimeout(r, 0));
+function toBlob(c, type, q){
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('画像の変換に失敗しました')), type, q));
+}
+function loadImg(blob){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => { URL.revokeObjectURL(url); res(im); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('画像を読み込めませんでした')); };
+    im.src = url;
+  });
+}
+
+/* ---------- 保存（端末内の下書き） ---------- */
+let dbP = null;
+function db(){
+  if (!dbP) dbP = new Promise((res, rej) => {
+    const r = indexedDB.open('scanpdf', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('blobs');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return dbP;
+}
+async function idb(mode, fn){
+  try {
+    const d = await db();
+    return await new Promise((res, rej) => {
+      const t = d.transaction('blobs', mode), req = fn(t.objectStore('blobs'));
+      t.oncomplete = () => res(req ? req.result : undefined);
+      t.onerror = t.onabort = () => rej(t.error);
+    });
+  } catch (e) { return undefined; }
+}
+const blobPut = (id, buf) => idb('readwrite', s => s.put(buf, id));
+const blobGet = id => idb('readonly', s => s.get(id));
+const blobDel = id => idb('readwrite', s => s.delete(id));
+const blobClear = () => idb('readwrite', s => s.clear());
+function saveMeta(){
+  try { localStorage.setItem(META_KEY, JSON.stringify(state.pages.map(({id,rot,mode,quad,w,h}) => ({id,rot,mode,quad,w,h})))); } catch (e) {}
+}
+function saveSettings(){ try { localStorage.setItem(SET_KEY, JSON.stringify(state.settings)); } catch (e) {} }
+
+/* ---------- 画像処理 ---------- */
+// 単位正方形 → 四角形 の射影変換で台形補正（双線形補間）
+function warp(src, out, P){
+  const [x0,y0] = P[0], [x1,y1] = P[1], [x2,y2] = P[2], [x3,y3] = P[3];
+  const dx1 = x1-x2, dx2 = x3-x2, dx3 = x0-x1+x2-x3;
+  const dy1 = y1-y2, dy2 = y3-y2, dy3 = y0-y1+y2-y3;
+  let g = 0, h = 0;
+  const den = dx1*dy2 - dx2*dy1;
+  if (Math.abs(den) > 1e-9 && (Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9)){
+    g = (dx3*dy2 - dx2*dy3) / den; h = (dx1*dy3 - dx3*dy1) / den;
+  }
+  const a = x1-x0+g*x1, b = x3-x0+h*x3, c = x0, d = y1-y0+g*y1, e = y3-y0+h*y3, f = y0;
+  const sw = src.width, sh = src.height, s = src.data, o = out.data, W = out.width, H = out.height;
+  let k = 0;
+  for (let j = 0; j < H; j++){
+    const v = 0.003 + 0.994 * (j + 0.5) / H;   // 縁の机などを拾わないよう少し内側から
+    for (let i = 0; i < W; i++){
+      const u = 0.003 + 0.994 * (i + 0.5) / W, z = g*u + h*v + 1;
+      let x = (a*u + b*v + c) / z - 0.5, y = (d*u + e*v + f) / z - 0.5;
+      if (x < 0) x = 0; else if (x > sw-1) x = sw-1;
+      if (y < 0) y = 0; else if (y > sh-1) y = sh-1;
+      const xi = x|0, yi = y|0, fx = x-xi, fy = y-yi;
+      const xj = xi < sw-1 ? xi+1 : xi, yj = yi < sh-1 ? yi+1 : yi;
+      const p00 = (yi*sw+xi)*4, p10 = (yi*sw+xj)*4, p01 = (yj*sw+xi)*4, p11 = (yj*sw+xj)*4;
+      for (let ch = 0; ch < 3; ch++){
+        const t = s[p00+ch] + (s[p10+ch]-s[p00+ch])*fx;
+        const bt = s[p01+ch] + (s[p11+ch]-s[p01+ch])*fx;
+        o[k+ch] = t + (bt-t)*fy;
+      }
+      o[k+3] = 255; k += 4;
+    }
+  }
+}
+function rotate(c, rot){
+  const r = ((rot % 360) + 360) % 360;
+  if (!r) return c;
+  const w = r % 180 ? c.height : c.width, h = r % 180 ? c.width : c.height;
+  const o = canvas(w, h), x = o.getContext('2d');
+  x.translate(w/2, h/2); x.rotate(r * Math.PI / 180); x.drawImage(c, -c.width/2, -c.height/2);
+  free(c);
+  return o;
+}
+function maxFilter(img, r){
+  const {width:w, height:h, data:s} = img, out = new ImageData(w, h), o = out.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let m0 = 0, m1 = 0, m2 = 0;
+    for (let yy = Math.max(0,y-r); yy <= Math.min(h-1,y+r); yy++)
+      for (let xx = Math.max(0,x-r); xx <= Math.min(w-1,x+r); xx++){
+        const p = (yy*w+xx)*4;
+        if (s[p] > m0) m0 = s[p]; if (s[p+1] > m1) m1 = s[p+1]; if (s[p+2] > m2) m2 = s[p+2];
+      }
+    const p = (y*w+x)*4; o[p] = m0; o[p+1] = m1; o[p+2] = m2; o[p+3] = 255;
+  }
+  return out;
+}
+function makeLut(lo, hi, gamma){
+  const L = new Uint8ClampedArray(1025);
+  for (let i = 0; i <= 1024; i++){ const t = clamp01((i/1024 - lo) / (hi - lo)); L[i] = Math.round(255 * Math.pow(t, gamma)); }
+  return L;
+}
+const LUT = { color: makeLut(0.10, 0.93, 1.25), bw: makeLut(0.30, 0.92, 1.8) };
+// 影・ムラ取り：背景（紙の明るさ）を推定して割り算
+function enhance(c, mode){
+  const w = c.width, h = c.height, x = ctx2d(c);
+  const bw = Math.max(8, Math.round(w/24)), bh = Math.max(8, Math.round(h/24));
+  const sm = canvas(bw, bh), sx = ctx2d(sm);
+  sx.imageSmoothingQuality = 'high'; sx.drawImage(c, 0, 0, bw, bh);
+  sx.putImageData(maxFilter(sx.getImageData(0, 0, bw, bh), 2), 0, 0);
+  const big = canvas(w, h), bx = ctx2d(big);
+  bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = 'high'; bx.drawImage(sm, 0, 0, w, h);
+  const bg = bx.getImageData(0, 0, w, h).data;
+  free(big); free(sm);
+  const img = x.getImageData(0, 0, w, h), d = img.data, n = d.length;
+  if (mode === 'bw'){
+    const T = LUT.bw;
+    for (let i = 0; i < n; i += 4){
+      const l = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      const bl = 0.299*bg[i] + 0.587*bg[i+1] + 0.114*bg[i+2];
+      let t = l / (bl > 1 ? bl : 1); if (t > 1) t = 1;
+      d[i] = d[i+1] = d[i+2] = T[(t*1024)|0];
+    }
+  } else {
+    const T = LUT.color;
+    for (let i = 0; i < n; i += 4){
+      for (let ch = 0; ch < 3; ch++){
+        let t = d[i+ch] / (bg[i+ch] > 1 ? bg[i+ch] : 1); if (t > 1) t = 1;
+        d[i+ch] = T[(t*1024)|0];
+      }
+    }
+  }
+  x.putImageData(img, 0, 0);
+}
+// 元画像 → トリミング → 回転 → 補正
+async function renderPage(p, maxEdge){
+  const im = await loadImg(p.blob);
+  const W = im.naturalWidth, H = im.naturalHeight;
+  let c;
+  if (isFull(p.quad)){
+    const k = Math.min(1, maxEdge / Math.max(W, H));
+    c = canvas(Math.max(1, Math.round(W*k)), Math.max(1, Math.round(H*k)));
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  } else {
+    const px = p.quad.map(([x,y]) => [x*W, y*H]);
+    const ow = Math.max(dist(px[0],px[1]), dist(px[3],px[2]));
+    const oh = Math.max(dist(px[0],px[3]), dist(px[1],px[2]));
+    const k = Math.min(1, maxEdge / Math.max(ow, oh, 1));
+    const sw = Math.max(1, Math.round(W*k)), sh = Math.max(1, Math.round(H*k));
+    const sc = canvas(sw, sh), sx = ctx2d(sc);
+    sx.drawImage(im, 0, 0, sw, sh);
+    const src = sx.getImageData(0, 0, sw, sh);
+    free(sc);
+    const dw = Math.max(1, Math.round(ow*k)), dh = Math.max(1, Math.round(oh*k));
+    c = canvas(dw, dh);
+    const cx = ctx2d(c), out = cx.createImageData(dw, dh);
+    warp(src, out, p.quad.map(([x,y]) => [x*sw, y*sh]));
+    cx.putImageData(out, 0, 0);
+  }
+  c = rotate(c, p.rot);
+  if (p.mode !== 'orig') enhance(c, p.mode);
+  return c;
+}
+
+/* ---------- 書類の輪郭検出 ----------
+   粗い画像(長辺320)でエッジ→Hough変換で直線候補→向かい合う2組から四角形を作り，
+   「辺に沿って内外の明るさの差が一貫しているか」で採点．最良の四角形を
+   細かい画像(長辺640)のエッジに最小二乗で合わせ直す．
+   返り値は正規化座標の [左上,右上,右下,左下]．見つからなければ null． */
+function grayOf(img){
+  const n = img.width * img.height, d = img.data, g = new Float32Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 4) g[i] = 0.299*d[j] + 0.587*d[j+1] + 0.114*d[j+2];
+  return g;
+}
+function blur5(src, w, h){
+  const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+  for (let y = 0; y < h; y++){
+    const r = y*w;
+    for (let x = 0; x < w; x++){
+      const a = src[r + Math.max(0,x-2)], b = src[r + Math.max(0,x-1)], c = src[r+x],
+            d = src[r + Math.min(w-1,x+1)], e = src[r + Math.min(w-1,x+2)];
+      tmp[r+x] = (a + 4*b + 6*c + 4*d + e) / 16;
+    }
+  }
+  for (let y = 0; y < h; y++){
+    const r0 = Math.max(0,y-2)*w, r1 = Math.max(0,y-1)*w, r = y*w, r3 = Math.min(h-1,y+1)*w, r4 = Math.min(h-1,y+2)*w;
+    for (let x = 0; x < w; x++) out[r+x] = (tmp[r0+x] + 4*tmp[r1+x] + 6*tmp[r+x] + 4*tmp[r3+x] + tmp[r4+x]) / 16;
+  }
+  return out;
+}
+function sobel(g, w, h){
+  const n = w*h, gx = new Float32Array(n), gy = new Float32Array(n), mag = new Float32Array(n);
+  for (let y = 1; y < h-1; y++) for (let x = 1; x < w-1; x++){
+    const i = y*w + x;
+    const a = g[i-w-1], b = g[i-w], c = g[i-w+1], d = g[i-1], f = g[i+1], p = g[i+w-1], q = g[i+w], r = g[i+w+1];
+    const sx = ((c + 2*f + r) - (a + 2*d + p)) / 8, sy = ((p + 2*q + r) - (a + 2*b + c)) / 8;
+    gx[i] = sx; gy[i] = sy; mag[i] = Math.hypot(sx, sy);
+  }
+  return { gx, gy, mag, w, h };
+}
+function percentile(arr, p){
+  const hist = new Uint32Array(1024); let cnt = 0;
+  for (let i = 0; i < arr.length; i++){ const v = Math.min(1023, (arr[i]*4)|0); if (v > 0){ hist[v]++; cnt++; } }
+  let acc = 0; const target = cnt * p;
+  for (let v = 0; v < 1024; v++){ acc += hist[v]; if (acc >= target) return v / 4; }
+  return 255;
+}
+function houghLines(G, edgeT, maxLines){
+  const { gx, gy, mag, w, h } = G, D = Math.ceil(Math.hypot(w, h)), nR = 2*D + 1, nT = 180;
+  const acc = new Int32Array(nT * nR), COS = new Float32Array(nT), SIN = new Float32Array(nT);
+  for (let t = 0; t < nT; t++){ COS[t] = Math.cos(t * Math.PI / 180); SIN[t] = Math.sin(t * Math.PI / 180); }
+  for (let y = 2; y < h-2; y++) for (let x = 2; x < w-2; x++){
+    const i = y*w + x; if (mag[i] < edgeT) continue;
+    const t0 = Math.round(((Math.atan2(gy[i], gx[i]) * 180 / Math.PI) + 360) % 180);
+    for (let dt = -6; dt <= 6; dt++){
+      const t = (t0 + dt + 180) % 180;
+      acc[t*nR + Math.round(x*COS[t] + y*SIN[t]) + D]++;
+    }
+  }
+  const minVotes = Math.max(12, 0.12 * Math.min(w, h)), peaks = [];
+  const at = (t, r) => { // θの端は ρ を反転してつなぐ
+    if (t < 0){ t += nT; r = nR - 1 - r; } else if (t >= nT){ t -= nT; r = nR - 1 - r; }
+    return (r < 0 || r >= nR) ? 0 : acc[t*nR + r];
+  };
+  for (let t = 0; t < nT; t++) for (let r = 0; r < nR; r++){
+    const v = acc[t*nR + r]; if (v < minVotes) continue;
+    let isMax = true;
+    for (let dt = -4; dt <= 4 && isMax; dt++) for (let dr = -8; dr <= 8; dr++){
+      if (!dt && !dr) continue;
+      const u = at(t+dt, r+dr);
+      if (u > v || (u === v && (dt < 0 || (dt === 0 && dr < 0)))){ isMax = false; break; }
+    }
+    if (isMax) peaks.push({ t, rho:r - D, v });
+  }
+  peaks.sort((a, b) => b.v - a.v);
+  return peaks.slice(0, maxLines).map(p => ({ nx:COS[p.t], ny:SIN[p.t], rho:p.rho, v:p.v }));
+}
+function intersect(a, b){ // n·p = rho 同士
+  const det = a.nx*b.ny - a.ny*b.nx; if (Math.abs(det) < 1e-6) return null;
+  return [(a.rho*b.ny - a.ny*b.rho) / det, (a.nx*b.rho - a.rho*b.nx) / det];
+}
+function polyArea(P){ let s = 0; for (let i = 0; i < 4; i++){ const a = P[i], b = P[(i+1)%4]; s += a[0]*b[1] - b[0]*a[1]; } return s / 2; }
+function isConvex(P){
+  let sign = 0;
+  for (let i = 0; i < 4; i++){
+    const a = P[i], b = P[(i+1)%4], c = P[(i+2)%4];
+    const cr = (b[0]-a[0])*(c[1]-b[1]) - (b[1]-a[1])*(c[0]-b[0]);
+    if (Math.abs(cr) < 1e-9) return false;
+    if (!sign) sign = Math.sign(cr); else if (Math.sign(cr) !== sign) return false;
+  }
+  return true;
+}
+function minAngleDeg(P){
+  let m = 180;
+  for (let i = 0; i < 4; i++){
+    const a = P[(i+3)%4], b = P[i], c = P[(i+1)%4];
+    const v1 = [a[0]-b[0], a[1]-b[1]], v2 = [c[0]-b[0], c[1]-b[1]];
+    const cos = (v1[0]*v2[0] + v1[1]*v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2));
+    m = Math.min(m, Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI);
+  }
+  return m;
+}
+// 四角形の採点：各辺で「勾配が内向き(外向き)に一貫」かつ「内外の明るさに差」がある割合
+function scoreQuad(P, G, g, T, Tc){
+  const { gx, gy, w, h } = G, cx = (P[0][0]+P[1][0]+P[2][0]+P[3][0]) / 4, cy = (P[0][1]+P[1][1]+P[2][1]+P[3][1]) / 4;
+  const sup = [[0,0,0,0], [0,0,0,0]], M = 36;
+  for (let k = 0; k < 4; k++){
+    const a = P[k], b = P[(k+1)%4], L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    const ux = (b[0]-a[0]) / L, uy = (b[1]-a[1]) / L;
+    let nx = -uy, ny = ux;
+    if ((cx - a[0])*nx + (cy - a[1])*ny < 0){ nx = -nx; ny = -ny; }   // 内向き
+    let valid = 0, pos = 0, neg = 0;
+    for (let s = 0; s < M; s++){
+      const t = 0.08 + 0.84 * s / (M - 1), px = a[0] + (b[0]-a[0])*t, py = a[1] + (b[1]-a[1])*t;
+      if (px < 6 || py < 6 || px > w-7 || py > h-7) continue;
+      valid++;
+      let best = -1e9, worst = 1e9;
+      for (let o = -2; o <= 2; o++){
+        const i = Math.round(py + ny*o) * w + Math.round(px + nx*o);
+        const v = gx[i]*nx + gy[i]*ny;
+        if (v > best) best = v; if (v < worst) worst = v;
+      }
+      const iin = Math.round(py + ny*5) * w + Math.round(px + nx*5), iout = Math.round(py - ny*5) * w + Math.round(px - nx*5);
+      const diff = g[iin] - g[iout];
+      if (best > T && diff > Tc) pos++;
+      if (worst < -T && diff < -Tc) neg++;
+    }
+    if (valid < M * 0.3) return -1;
+    sup[0][k] = pos / valid; sup[1][k] = neg / valid;
+  }
+  let bestScore = -1, pol = 1;
+  sup.forEach((sp, j) => {
+    const mean = (sp[0]+sp[1]+sp[2]+sp[3]) / 4, mn = Math.min(...sp), sc = 0.65*mean + 0.35*mn;
+    if (sc > bestScore){ bestScore = sc; pol = j ? -1 : 1; }
+  });
+  return { score:bestScore, pol };
+}
+// 辺を細かい画像のエッジに最小二乗で合わせ直す
+function refineQuad(P, G, pol, T){
+  const { gx, gy, w, h } = G, cx = (P[0][0]+P[1][0]+P[2][0]+P[3][0]) / 4, cy = (P[0][1]+P[1][1]+P[2][1]+P[3][1]) / 4;
+  const lines = [];
+  for (let k = 0; k < 4; k++){
+    const a = P[k], b = P[(k+1)%4], L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    const ux = (b[0]-a[0]) / L, uy = (b[1]-a[1]) / L;
+    let nx = -uy, ny = ux;
+    if ((cx - a[0])*nx + (cy - a[1])*ny < 0){ nx = -nx; ny = -ny; }
+    let pts = [];
+    for (let s = 0; s < 64; s++){
+      const t = 0.1 + 0.8 * s / 63, px = a[0] + (b[0]-a[0])*t, py = a[1] + (b[1]-a[1])*t;
+      let best = -1e9, bo = 0;
+      for (let o = -6; o <= 6; o++){
+        const x = Math.round(px + nx*o), y = Math.round(py + ny*o);
+        if (x < 1 || y < 1 || x > w-2 || y > h-2) continue;
+        const i = y*w + x, v = pol * (gx[i]*nx + gy[i]*ny);
+        if (v > best){ best = v; bo = o; }
+      }
+      if (best > T) pts.push([px + nx*bo, py + ny*bo]);
+    }
+    let line = null;
+    for (let iter = 0; iter < 2 && pts.length >= 10; iter++){
+      let mx = 0, my = 0; pts.forEach(p => { mx += p[0]; my += p[1]; }); mx /= pts.length; my /= pts.length;
+      let sxx = 0, sxy = 0, syy = 0; pts.forEach(p => { const dx = p[0]-mx, dy = p[1]-my; sxx += dx*dx; sxy += dx*dy; syy += dy*dy; });
+      const th = 0.5 * Math.atan2(2*sxy, sxx - syy), dx = Math.cos(th), dy = Math.sin(th);
+      line = { nx:-dy, ny:dx, rho:-dy*mx + dx*my };
+      pts = pts.filter(p => Math.abs(line.nx*p[0] + line.ny*p[1] - line.rho) < 1.5);
+    }
+    if (!line){ line = { nx, ny, rho:nx*a[0] + ny*a[1] }; }
+    lines.push(line);
+  }
+  const Q = [];
+  for (let k = 0; k < 4; k++){ const p = intersect(lines[(k+3)%4], lines[k]); if (!p) return P; Q.push(p); }
+  if (!isConvex(Q) || Math.abs(polyArea(Q)) < 0.8 * Math.abs(polyArea(P))) return P;
+  if (Q.some((q, i) => dist(q, P[i]) > 0.06 * Math.max(w, h))) return P;
+  return Q;
+}
+function detectQuadFromSource(src, sw, sh){
+  const kf = Math.min(1, 640 / Math.max(sw, sh));
+  const W = Math.max(32, Math.round(sw*kf)), H = Math.max(32, Math.round(sh*kf));
+  const cf = canvas(W, H), xf = ctx2d(cf); xf.imageSmoothingQuality = 'high'; xf.drawImage(src, 0, 0, W, H);
+  const w = Math.round(W/2), h = Math.round(H/2), cc = canvas(w, h), xc = ctx2d(cc);
+  xc.imageSmoothingQuality = 'high'; xc.drawImage(cf, 0, 0, w, h);
+  const fine = blur5(grayOf(xf.getImageData(0, 0, W, H)), W, H);
+  const coarse = blur5(blur5(grayOf(xc.getImageData(0, 0, w, h)), w, h), w, h);
+  free(cf); free(cc);
+  const Gc = sobel(coarse, w, h), Gf = sobel(fine, W, H);
+  const p97 = percentile(Gc.mag, 0.97);
+  const edgeT = Math.max(2.5, Math.min(percentile(Gc.mag, 0.88), 0.35 * p97));   // 文字のエッジに埋もれた薄い紙の縁も拾う
+  const T = Math.max(2, 0.2 * p97), Tc = 6;
+  const L = houghLines(Gc, edgeT, 28);
+  // 向かい合う辺の組（角度が近く，十分離れている）
+  const pairs = [], minSep = 0.18 * Math.min(w, h), cx = w/2, cy = h/2;
+  for (let i = 0; i < L.length; i++) for (let j = i+1; j < L.length; j++){
+    const a = L[i]; let b = L[j];
+    let dot = a.nx*b.nx + a.ny*b.ny;
+    if (dot < 0){ b = { nx:-b.nx, ny:-b.ny, rho:-b.rho }; dot = -dot; }
+    if (dot < Math.cos(32 * Math.PI / 180)) continue;
+    const sep = Math.abs((a.rho - a.nx*cx - a.ny*cy) - (b.rho - b.nx*cx - b.ny*cy));
+    if (sep < minSep) continue;
+    const mx = a.nx + b.nx, my = a.ny + b.ny, ml = Math.hypot(mx, my);
+    pairs.push({ a:L[i], b:L[j], dx:mx/ml, dy:my/ml });
+  }
+  let best = null;
+  const lo = -0.12, hi = 1.12;
+  for (let i = 0; i < pairs.length; i++) for (let j = i+1; j < pairs.length; j++){
+    const A = pairs[i], B = pairs[j];
+    if (Math.abs(A.dx*B.dx + A.dy*B.dy) > Math.cos(50 * Math.PI / 180)) continue;   // 2組の向きが十分違う
+    const pts = [intersect(A.a, B.a), intersect(A.a, B.b), intersect(A.b, B.b), intersect(A.b, B.a)];
+    if (pts.some(p => !p || p[0] < lo*w || p[0] > hi*w || p[1] < lo*h || p[1] > hi*h)) continue;
+    const P = normalizeQuad(pts);
+    if (!isConvex(P)) continue;
+    const area = Math.abs(polyArea(P)) / (w*h);
+    if (area < 0.12 || minAngleDeg(P) < 40) continue;
+    const r = scoreQuad(P, Gc, coarse, T, Tc);
+    if (r === -1) continue;
+    const total = r.score + 0.25 * Math.min(area, 1);
+    if (r.score >= 0.55 && (!best || total > best.total)) best = { P, pol:r.pol, total };
+  }
+  if (!best) return null;
+  const Pf = refineQuad(best.P.map(([x,y]) => [x*W/w, y*H/h]), Gf, best.pol, T);
+  return Pf.map(([x,y]) => [clamp01(x / W), clamp01(y / H)]);
+}
+async function detectQuadFromBlob(blob){
+  const im = await loadImg(blob);
+  return detectQuadFromSource(im, im.naturalWidth, im.naturalHeight);
+}
+
+/* ---------- PDF（外部ライブラリなし．JPEGをそのまま埋め込む） ---------- */
+function jpegInfo(u8){
+  let i = 2;
+  while (i < u8.length - 9){
+    if (u8[i] !== 0xFF){ i++; continue; }
+    const m = u8[i+1];
+    if (m === 0xFF){ i++; continue; }
+    if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)){ i += 2; continue; }
+    const len = (u8[i+2] << 8) | u8[i+3];
+    if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC)
+      return { h:(u8[i+5] << 8) | u8[i+6], w:(u8[i+7] << 8) | u8[i+8], nc:u8[i+9] };
+    i += 2 + len;
+  }
+  throw new Error('JPEGの解析に失敗しました');
+}
+function buildPdf(items){
+  const enc = new TextEncoder(), parts = [], offs = [];
+  let pos = 0;
+  const put = d => { const u = typeof d === 'string' ? enc.encode(d) : d; parts.push(u); pos += u.length; };
+  const obj = (n, body) => { offs[n] = pos; put(n + ' 0 obj\n'); body(); put('\nendobj\n'); };
+  const f = v => (Math.round(v * 100) / 100).toString();
+  put(new Uint8Array([0x25,0x50,0x44,0x46,0x2D,0x31,0x2E,0x34,0x0A,0x25,0xE2,0xE3,0xCF,0xD3,0x0A])); // %PDF-1.4
+  const n = items.length;
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2, () => put('<< /Type /Pages /Kids [' + items.map((_,i) => (3+3*i) + ' 0 R').join(' ') + '] /Count ' + n + ' >>'));
+  items.forEach((it, i) => {
+    const po = 3+3*i, co = po+1, io = po+2;
+    const info = jpegInfo(it.jpeg);
+    const cs = info.nc === 1 ? '/DeviceGray' : info.nc === 4 ? '/DeviceCMYK' : '/DeviceRGB';
+    obj(po, () => put('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + f(it.pw) + ' ' + f(it.ph) + '] /Resources << /XObject << /Im0 ' + io + ' 0 R >> >> /Contents ' + co + ' 0 R >>'));
+    const stream = 'q ' + f(it.dw) + ' 0 0 ' + f(it.dh) + ' ' + f(it.x) + ' ' + f(it.y) + ' cm /Im0 Do Q';
+    obj(co, () => { put('<< /Length ' + stream.length + ' >>\nstream\n'); put(stream); put('\nendstream'); });
+    obj(io, () => {
+      put('<< /Type /XObject /Subtype /Image /Width ' + info.w + ' /Height ' + info.h + ' /ColorSpace ' + cs +
+          ' /BitsPerComponent 8 /Filter /DCTDecode' + (info.nc === 4 ? ' /Decode [1 0 1 0 1 0 1 0]' : '') + ' /Length ' + it.jpeg.length + ' >>\nstream\n');
+      put(it.jpeg); put('\nendstream');
+    });
+  });
+  const size = 3 + 3*n, xref = pos;
+  let t = 'xref\n0 ' + size + '\n0000000000 65535 f \n';
+  for (let k = 1; k < size; k++) t += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
+  put(t + 'trailer\n<< /Size ' + size + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  return new Blob(parts, { type:'application/pdf' });
+}
+function layout(w, h){
+  const A4W = 595.28, A4H = 841.89;
+  if (state.settings.paper === 'a4'){
+    const land = w > h, pw = land ? A4H : A4W, ph = land ? A4W : A4H;
+    const s = Math.min(pw / w, ph / h), dw = w*s, dh = h*s;
+    return { pw, ph, dw, dh, x:(pw-dw)/2, y:(ph-dh)/2 };
+  }
+  const s = A4H / Math.max(w, h);
+  return { pw:w*s, ph:h*s, dw:w*s, dh:h*s, x:0, y:0 };
+}
+function fileName(){
+  let n = (state.settings.fname || '').trim().replace(/[\\/:*?"<>|]/g, '_');
+  if (!n){
+    const d = new Date(), z = v => String(v).padStart(2, '0');
+    n = `scan_${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`;
+  }
+  return /\.pdf$/i.test(n) ? n : n + '.pdf';
+}
+const fmtSize = b => b < 1048576 ? Math.max(1, Math.round(b/1024)) + 'KB' : (b/1048576).toFixed(1) + 'MB';
+
+/* ---------- UI ---------- */
+function busy(on, text){ $('#busy').classList.toggle('show', on); if (text) $('#busyText').textContent = text; }
+function hideToast(){ $('#toast').classList.remove('show'); }
+function toast(msg, action){
+  const t = $('#toast'); t.textContent = '';
+  const s = document.createElement('span'); s.textContent = msg; t.appendChild(s);
+  if (action){
+    const b = document.createElement('button'); b.textContent = action.label;
+    b.onclick = () => { hideToast(); action.fn(); }; t.appendChild(b);
+  }
+  t.classList.add('show'); clearTimeout(toast.tm);
+  toast.tm = setTimeout(hideToast, action ? 5000 : 3000);
+}
+const keyOf = p => p.rot + '|' + p.mode + '|' + JSON.stringify(p.quad);
+let thumbChain = Promise.resolve();
+function ensureThumb(p){
+  const c = thumbs.get(p.id);
+  if (c && c.key === keyOf(p)) return c.url;
+  thumbChain = thumbChain.then(async () => {
+    if (!state.pages.includes(p)) return;
+    const key = keyOf(p), old = thumbs.get(p.id);
+    if (old && old.key === key) return;
+    const cv = await renderPage(p, 480), b = await toBlob(cv, 'image/jpeg', 0.8);
+    free(cv);
+    const url = URL.createObjectURL(b);
+    if (old) URL.revokeObjectURL(old.url);
+    thumbs.set(p.id, { key, url });
+    const im = document.querySelector(`.card[data-id="${p.id}"] img`);
+    if (im) im.src = url;
+  }).catch(e => console.warn(e));
+  return c ? c.url : null;
+}
+function render(){
+  const n = state.pages.length;
+  $('#count').textContent = n ? n + 'ページ' : '';
+  $('#empty').hidden = n > 0;
+  $('#makePdf').disabled = n === 0;
+  const grid = $('#grid'); grid.textContent = '';
+  const opts = MODES.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+  state.pages.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'card'; el.dataset.id = p.id;
+    el.innerHTML =
+      `<div class="thumb" data-act="edit"><img alt="${i+1}ページ目"><span class="num">${i+1}</span>` +
+      (isFull(p.quad) ? '' : '<span class="tag">トリミング</span>') + `</div>` +
+      `<select data-act="mode" aria-label="補正">${opts}</select>` +
+      `<div class="tools">` +
+      `<button data-act="left" aria-label="前へ"${i === 0 ? ' disabled' : ''}>◀</button>` +
+      `<button data-act="rot" aria-label="回転">⟳</button>` +
+      `<button data-act="right" aria-label="後ろへ"${i === n-1 ? ' disabled' : ''}>▶</button>` +
+      `<button data-act="del" class="del" aria-label="削除">✕</button></div>`;
+    el.querySelector('select').value = p.mode;
+    const url = ensureThumb(p);
+    if (url) el.querySelector('img').src = url;
+    grid.appendChild(el);
+  });
+}
+async function addFiles(list){
+  const files = [...list].filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
+  if (!files.length) return;
+  let ok = 0, det = 0;
+  for (let i = 0; i < files.length; i++){
+    busy(true, files.length > 1 ? `読み込み中… ${i+1}/${files.length}` : '読み込み中…');
+    try {
+      const im = await loadImg(files[i]);
+      const k = Math.min(1, MAX_SRC / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = canvas(Math.round(im.naturalWidth*k), Math.round(im.naturalHeight*k));
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const blob = await toBlob(c, 'image/jpeg', 0.92);
+      let quad = null;
+      if (state.settings.autoDetect){
+        busy(true, files.length > 1 ? `輪郭を検出中… ${i+1}/${files.length}` : '輪郭を検出中…');
+        try { quad = detectQuadFromSource(c, c.width, c.height); } catch (e) { console.warn(e); }
+        if (quad && !isFull(quad)) det++; else quad = null;
+      }
+      const p = { id:uid(), blob, rot:0, mode:state.settings.defMode, quad, w:c.width, h:c.height };
+      free(c);
+      state.pages.push(p);
+      await blobPut(p.id, await blob.arrayBuffer());
+      ok++;
+    } catch (e) { console.warn(e); }
+  }
+  saveMeta(); busy(false); render();
+  if (ok < files.length) toast(`${files.length - ok}枚を読み込めませんでした．`);
+  else if (state.settings.autoDetect && ok) toast(det === ok ? '輪郭を自動で合わせました．ずれていたら写真をタップ．' : det ? `${ok}枚中${det}枚の輪郭を合わせました．残りは写真をタップして調整．` : '輪郭が見つかりませんでした．写真をタップして四隅を合わせてください．');
+  if (ok) setTimeout(() => window.scrollTo({ top:document.body.scrollHeight, behavior:'smooth' }), 50);
+}
+function removePage(idx){
+  const [p] = state.pages.splice(idx, 1);
+  saveMeta(); render();
+  blobDel(p.id);
+  toast(`${idx+1}ページ目を削除しました．`, { label:'元に戻す', fn: async () => {
+    state.pages.splice(Math.min(idx, state.pages.length), 0, p);
+    await blobPut(p.id, await p.blob.arrayBuffer());
+    saveMeta(); render();
+  }});
+}
+async function clearAll(){
+  state.pages = []; lastPdf = null;
+  thumbs.forEach(t => URL.revokeObjectURL(t.url)); thumbs.clear();
+  await blobClear(); saveMeta(); render();
+}
+
+$('#grid').addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t || t.tagName === 'SELECT') return;
+  const card = t.closest('.card'), idx = state.pages.findIndex(p => p.id === card.dataset.id);
+  if (idx < 0) return;
+  const p = state.pages[idx], act = t.dataset.act;
+  if (act === 'edit') return openEditor(p);
+  if (act === 'rot') p.rot = (p.rot + 90) % 360;
+  if (act === 'left' && idx > 0) [state.pages[idx-1], state.pages[idx]] = [state.pages[idx], state.pages[idx-1]];
+  if (act === 'right' && idx < state.pages.length-1) [state.pages[idx+1], state.pages[idx]] = [state.pages[idx], state.pages[idx+1]];
+  if (act === 'del') return removePage(idx);
+  saveMeta(); render();
+});
+$('#grid').addEventListener('change', e => {
+  if (e.target.dataset.act !== 'mode') return;
+  const p = state.pages.find(p => p.id === e.target.closest('.card').dataset.id);
+  if (p){ p.mode = e.target.value; saveMeta(); render(); }
+});
+for (const id of ['#camIn', '#libIn']){
+  $(id).addEventListener('change', async e => { const fs = [...e.target.files]; e.target.value = ''; await addFiles(fs); });
+}
+
+/* ---------- トリミング画面 ---------- */
+const ed = { p:null, quad:null, rot:0, rect:null, drag:null };
+const toDisp = ([x,y], r) => r === 90 ? [1-y, x] : r === 180 ? [1-x, 1-y] : r === 270 ? [y, 1-x] : [x, y];
+const fromDisp = ([u,v], r) => r === 90 ? [v, 1-u] : r === 180 ? [1-u, 1-v] : r === 270 ? [1-v, u] : [u, v];
+const handles = [...document.querySelectorAll('.handle')];
+function normalizeQuad(q){
+  const cx = q.reduce((s,p) => s + p[0], 0) / 4, cy = q.reduce((s,p) => s + p[1], 0) / 4;
+  const s = q.slice().sort((a,b) => Math.atan2(a[1]-cy, a[0]-cx) - Math.atan2(b[1]-cy, b[0]-cx));
+  let k = 0; s.forEach((p,i) => { if (p[0]+p[1] < s[k][0]+s[k][1]) k = i; });
+  return s.slice(k).concat(s.slice(0, k));
+}
+async function openEditor(p){
+  ed.p = p; ed.quad = (p.quad || FULL).map(a => a.slice()); ed.rot = p.rot;
+  $('#editor').classList.add('show');
+  await drawEditorImage();
+}
+async function drawEditorImage(){
+  const im = await loadImg(ed.p.blob);
+  const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+  let c = canvas(Math.round(im.naturalWidth*k), Math.round(im.naturalHeight*k));
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  c = rotate(c, ed.rot);
+  const b = await toBlob(c, 'image/jpeg', 0.85); free(c);
+  const img = $('#edImg');
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  const url = URL.createObjectURL(b); img.dataset.url = url;
+  img.onload = layoutEditor; img.src = url;
+}
+function layoutEditor(){
+  const sr = $('#edStage').getBoundingClientRect(), ir = $('#edImg').getBoundingClientRect();
+  ed.rect = { x:ir.left - sr.left, y:ir.top - sr.top, w:ir.width, h:ir.height };
+  drawHandles();
+}
+function drawHandles(){
+  if (!ed.rect) return;
+  const { x, y, w, h } = ed.rect;
+  const pts = ed.quad.map(q => toDisp(q, ed.rot)).map(([u,v]) => [x + u*w, y + v*h]);
+  handles.forEach((hd, i) => { hd.style.left = pts[i][0] + 'px'; hd.style.top = pts[i][1] + 'px'; });
+  $('#edPoly').setAttribute('points', pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
+}
+handles.forEach((hd, i) => {
+  hd.addEventListener('pointerdown', e => {
+    e.preventDefault(); hd.setPointerCapture(e.pointerId); ed.drag = i; hd.classList.add('active');
+  });
+  hd.addEventListener('pointermove', e => {
+    if (ed.drag !== i || !ed.rect) return;
+    const sr = $('#edStage').getBoundingClientRect();
+    const u = clamp01((e.clientX - sr.left - ed.rect.x) / ed.rect.w), v = clamp01((e.clientY - sr.top - ed.rect.y) / ed.rect.h);
+    ed.quad[i] = fromDisp([u, v], ed.rot); drawHandles();
+  });
+  const end = () => { ed.drag = null; hd.classList.remove('active'); };
+  hd.addEventListener('pointerup', end); hd.addEventListener('pointercancel', end);
+});
+function closeEditor(){ $('#editor').classList.remove('show'); ed.p = null; ed.rect = null; }
+$('#edCancel').onclick = closeEditor;
+$('#edReset').onclick = () => { ed.quad = FULL.map(a => a.slice()); drawHandles(); };
+function edFlash(m){ const el = $('#edMsg'); el.textContent = m; clearTimeout(edFlash.tm); edFlash.tm = setTimeout(() => { el.textContent = '四隅を書類に合わせる'; }, 2500); }
+$('#edAuto').onclick = async () => {
+  if (!ed.p) return;
+  const b = $('#edAuto'); b.disabled = true;
+  try {
+    const q = await detectQuadFromBlob(ed.p.blob);
+    if (q){ ed.quad = q; drawHandles(); edFlash('輪郭を合わせました．'); } else edFlash('輪郭が見つかりませんでした．');
+  } catch (e) { edFlash('検出に失敗しました．'); }
+  b.disabled = false;
+};
+$('#edRot').onclick = async () => { ed.rot = (ed.rot + 90) % 360; await drawEditorImage(); };
+$('#edDone').onclick = () => {
+  const p = ed.p; if (!p) return;
+  const q = normalizeQuad(ed.quad);
+  p.quad = isFull(q) ? null : q; p.rot = ed.rot;
+  closeEditor(); saveMeta(); render();
+};
+window.addEventListener('resize', () => { if (ed.p) layoutEditor(); });
+
+/* ---------- PDF作成と保存 ---------- */
+const inArtifact = () => !!(window.claude && typeof window.claude.use === 'function');
+let dlP = null;
+function getDownloads(){
+  if (!dlP) dlP = inArtifact() ? Promise.resolve(window.claude.use('downloads')).catch(() => null) : Promise.resolve(null);
+  return dlP;
+}
+const resMsg = m => { $('#resMsg').textContent = m; };
+async function makePdf(){
+  const n = state.pages.length; if (!n) return;
+  const Q = QUALITY[state.settings.quality] || QUALITY.std, items = [];
+  try {
+    for (let i = 0; i < n; i++){
+      busy(true, `PDF作成中… ${i+1}/${n}`);
+      await nextFrame();
+      const c = await renderPage(state.pages[i], Q.edge);
+      const b = await toBlob(c, 'image/jpeg', Q.q);
+      items.push({ jpeg:new Uint8Array(await b.arrayBuffer()), ...layout(c.width, c.height) });
+      free(c);
+    }
+    const blob = buildPdf(items);
+    lastPdf = { blob, name:fileName() };
+    busy(false);
+    $('#resMeta').textContent = `${lastPdf.name}（${n}ページ・${fmtSize(blob.size)}）`;
+    resMsg(''); $('#result').classList.add('show');
+    if (inArtifact()) savePdf();
+  } catch (e) {
+    busy(false); console.error(e);
+    toast('PDFの作成に失敗しました：' + (e && e.message || e));
+  }
+}
+async function savePdf(){
+  if (!lastPdf) return;
+  const { blob, name } = lastPdf;
+  if (inArtifact()){
+    const dl = await getDownloads();
+    if (!dl){ resMsg('この表示では保存できません．Claudeアプリかブラウザで開き直してください．'); return; }
+    try {
+      await dl.save({ filename:name, data:blob });
+      resMsg('保存しました．');
+    } catch (e) {
+      const c = e && e.code;
+      resMsg(c === 'declined' ? 'キャンセルしました．「保存 / 共有」でやり直せます．'
+        : c === 'rate_limited' ? '少し待ってから，もう一度押してください．'
+        : c === 'too_large' ? 'ファイルが大きすぎます．設定で画質を「標準」にしてください．'
+        : '保存できませんでした．もう一度お試しください．');
+    }
+    return;
+  }
+  // 単体（自分のサーバー等）で開いた場合
+  try {
+    const file = new File([blob], name, { type:'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:name });
+      resMsg('共有しました．'); return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError'){ resMsg('キャンセルしました．'); return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  resMsg('ダウンロードしました．');
+}
+$('#makePdf').onclick = makePdf;
+$('#resSave').onclick = savePdf;
+$('#resClose').onclick = () => $('#result').classList.remove('show');
+$('#resNew').onclick = async () => { $('#result').classList.remove('show'); await clearAll(); };
+
+/* ---------- 設定 ---------- */
+$('#setMode').innerHTML = MODES.map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+function applySettingsUI(){
+  const s = state.settings;
+  $('#setName').value = s.fname; $('#setPaper').value = s.paper; $('#setQuality').value = s.quality; $('#setMode').value = s.defMode; $('#setAuto').value = s.autoDetect ? 'on' : 'off';
+}
+$('#setName').addEventListener('input', e => { state.settings.fname = e.target.value; saveSettings(); });
+$('#setPaper').addEventListener('change', e => { state.settings.paper = e.target.value; saveSettings(); });
+$('#setQuality').addEventListener('change', e => { state.settings.quality = e.target.value; saveSettings(); });
+$('#setMode').addEventListener('change', e => { state.settings.defMode = e.target.value; saveSettings(); });
+$('#setAuto').addEventListener('change', e => { state.settings.autoDetect = e.target.value === 'on'; saveSettings(); });
+$('#clearAll').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  if (!state.pages.length) return;
+  if (!b.classList.contains('armed')){
+    b.classList.add('armed'); b.textContent = 'もう一度押すと全部削除します';
+    clearTimeout(b.tm); b.tm = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'すべてのページを削除'; }, 3000);
+    return;
+  }
+  clearTimeout(b.tm); b.classList.remove('armed'); b.textContent = 'すべてのページを削除';
+  await clearAll(); toast('すべて削除しました．');
+});
+
+/* ---------- 起動：前回の続きを復元 ---------- */
+(async function init(){
+  try { Object.assign(state.settings, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) {}
+  applySettingsUI();
+  let meta = [];
+  try { meta = JSON.parse(localStorage.getItem(META_KEY) || '[]'); } catch (e) {}
+  if (Array.isArray(meta) && meta.length){
+    busy(true, '前回の続きを読み込み中…');
+    for (const m of meta){
+      const buf = await blobGet(m.id);
+      if (buf) state.pages.push({ ...m, blob:new Blob([buf], { type:'image/jpeg' }) });
+    }
+    busy(false);
+  }
+  render();
+  setTimeout(getDownloads, 1500);
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !inArtifact()){
+    try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+  }
+})();
+</script>
+</body>
+</html>
